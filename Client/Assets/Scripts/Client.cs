@@ -8,6 +8,7 @@ using System.IO;
 
 public class Client : MonoBehaviour
 {
+    public static Client Instance {get; private set;}
 
     private const int MAX_USER = 100;
     private const int PORT = 26000;
@@ -26,6 +27,7 @@ public class Client : MonoBehaviour
     public Text log;
 
      private void Start() {
+         Instance = this;
         DontDestroyOnLoad(gameObject);
         Init();
     }
@@ -111,9 +113,33 @@ public class Client : MonoBehaviour
                 Debug.Log("Unexpeted NETOP");
                 break;
 
+            case NetOP.OnCreateAccount:
+                OnCreateAccount((Net_OnCreateAccount)msg);
+                break;
+
+            case NetOP.OnLoginRequest:
+                OnLoginRequest((Net_OnLoginRequest)msg);
+                break;
+
         }
     }
 
+    private void OnCreateAccount(Net_OnCreateAccount oca) {
+        LobbyScene.Instance.EnableInputs();
+        LobbyScene.Instance.ChangeAthenticationMessage(oca.Infomation);
+    }
+
+    private void OnLoginRequest(Net_OnLoginRequest olr) {
+
+        LobbyScene.Instance.ChangeAthenticationMessage(olr.Infomation);
+
+        if(olr.Success != 1) {
+            LobbyScene.Instance.EnableInputs();
+        } else {
+            // Success login
+        }
+
+    }
     public void SendServer(NetMsg msg) {
         // This is where we hold our data
         byte[] buffer = new byte[BYTE_SIZE];
@@ -128,12 +154,20 @@ public class Client : MonoBehaviour
 
     }
 
-    public void TestCreatAcc() {
-        Net_CreateAccount ca = new Net_CreateAccount();
-        ca.Username = "Sag";
-        ca.Password = "Bam";
-        ca.Email = "a@a.com";
+    public void SendCreateAccount(string username, string password, string email) {
+            Net_CreateAccount ca = new Net_CreateAccount();
+            ca.Username = username;
+            ca.Password = password;
+            ca.Email = email;
 
-        SendServer(ca);
+            SendServer(ca);
+    }
+    
+    public void SendLoginRequest(string usernameOrEmail, string password) {
+            Net_LoginRequest lr = new Net_LoginRequest();
+            lr.UsernameOrEmail= usernameOrEmail;
+            lr.Password = password;
+            
+            SendServer(lr);
     }
 }

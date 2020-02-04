@@ -89,14 +89,38 @@ public class Server : MonoBehaviour
             case NetOP.None:
                 Debug.Log("Unexpeted NETOP");
                 break;
+
             case NetOP.CreateAccount:
                 CreateAccount(cnnId, channelId, recHostId, (Net_CreateAccount)msg);
                 break;
+
+            case NetOP.LoginRequest:
+                LoginRequest(cnnId, channelId, recHostId, (Net_LoginRequest)msg);
+                break;                
         }
     }
 
     private void CreateAccount(int cnnId, int channelId, int recHostId, Net_CreateAccount ca) {
         Debug.Log(string.Format("{0},{1},{2}", ca.Username, ca.Password, ca.Email ) );
+        
+        Net_OnCreateAccount oca = new Net_OnCreateAccount();
+        oca.Success = 0;
+        oca.Infomation = "Account was created";
+
+        SendClient(recHostId,cnnId, oca);
+    }
+
+    private void LoginRequest(int cnnId, int channelId, int recHostId, Net_LoginRequest lr) {
+        Debug.Log(string.Format("{0},{1}", lr.UsernameOrEmail, lr.Password) );
+        
+        Net_OnLoginRequest olr = new Net_OnLoginRequest();
+        olr.Success = 0;
+        olr.Infomation = "Everything is good";
+        olr.Discriminator = "0000";
+        olr.Token = "TOKEN";
+        
+
+        SendClient(recHostId,cnnId, olr);
     }
 
     public void SendClient(int recHost, int cnnId, NetMsg msg) {
