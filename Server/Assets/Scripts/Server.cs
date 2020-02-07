@@ -1,4 +1,5 @@
-﻿using System.Collections;
+﻿using System;
+using System.Collections;
 using System.Collections.Generic;
 using System.IO;
 using System.Runtime.Serialization.Formatters.Binary;
@@ -20,6 +21,8 @@ public class Server : MonoBehaviour
     private bool isStarted = false;
     private byte error;
 
+    private Mongo db;
+
     private void Start() {
         DontDestroyOnLoad(gameObject);
         Init();
@@ -28,6 +31,10 @@ public class Server : MonoBehaviour
         UpdateMessagePump();
     }
     public void Init() {
+
+        db = new Mongo();
+        db.Init();
+
         NetworkTransport.Init();
 
         ConnectionConfig cc = new ConnectionConfig();
@@ -40,6 +47,9 @@ public class Server : MonoBehaviour
         
         Debug.Log("Start server");
         isStarted = true;
+
+        // TEST
+        //db.InsertAccount("Bam","mmm","aaa");
     }
     public void Shutdown() {
         isStarted = false;
@@ -96,16 +106,76 @@ public class Server : MonoBehaviour
 
             case NetOP.LoginRequest:
                 LoginRequest(cnnId, channelId, recHostId, (Net_LoginRequest)msg);
-                break;                
+                break;            
+
+            case NetOP.AddFollow:
+                AddFollow(cnnId, channelId, recHostId, (Net_AddFollow)msg);
+                break;
+
+            case NetOP.RemoveFollow:
+                RemoveFollow(cnnId, channelId, recHostId, (Net_RemoveFollow)msg);
+                break;
+
+            case NetOP.RequestFollow:
+                //AddFollow(cnnId, channelId, recHostId, (Net_AddFollow)msg);
+               
+                RequestFollow(cnnId, channelId, recHostId, (Net_RequestFollow)msg);
+                break;
+
         }
+    }
+
+    private void RequestFollow(int cnnId, int channelId, int recHostId, Net_RequestFollow msg)
+    {
+         Net_OnRequestFollow orf = new Net_OnRequestFollow();
+
+        orf.Follows = db.FindAllFollowBy(msg.Token);
+
+         SendClient(recHostId, cnnId, orf);
+
+    }
+
+    private void RemoveFollow(int cnnId, int channelId, int recHostId, Net_RemoveFollow msg)
+    {
+       db.RemoveFollow(msg.Token, msg.UsernameDiscriminator);
+    }
+
+    private void AddFollow(int cnnId, int channelId, int recHostId, Net_AddFollow msg)
+    {
+        Net_OnAddFollow oaf = new Net_OnAddFollow();
+
+        if(db.InsertFollow(msg.Token, msg.UsernameDiscriminatorOrEmail)){
+
+            oaf.Success = 1;
+            
+            if(Utility.IsEmail(msg.UsernameDiscriminatorOrEmail)) {
+
+                oaf.Follow = db.FindAccountByEmail(msg.UsernameDiscriminatorOrEmail).GetAccount();
+            } else {
+                string[] data = msg.UsernameDiscriminatorOrEmail.Split('#');
+                if(data[1] == null) {
+                    return;
+                }
+                oaf.Follow = db.FindAccountByUsernameAndDiscriminator(data[0], data[1]).GetAccount();
+            }
+        }
+        SendClient(recHostId,cnnId,oaf);
+
     }
 
     private void CreateAccount(int cnnId, int channelId, int recHostId, Net_CreateAccount ca) {
         Debug.Log(string.Format("{0},{1},{2}", ca.Username, ca.Password, ca.Email ) );
         
         Net_OnCreateAccount oca = new Net_OnCreateAccount();
-        oca.Success = 0;
-        oca.Infomation = "Account was created";
+
+        if(db.InsertAccount(ca.Username, ca.Password, ca.Email)) {
+            oca.Success = 0;
+            oca.Infomation = "Account was created";
+        } else {
+            oca.Success = 0;
+            oca.Infomation = "Ther was an error creating the account";
+        }
+
 
         SendClient(recHostId,cnnId, oca);
     }
@@ -113,11 +183,22 @@ public class Server : MonoBehaviour
     private void LoginRequest(int cnnId, int channelId, int recHostId, Net_LoginRequest lr) {
         Debug.Log(string.Format("{0},{1}", lr.UsernameOrEmail, lr.Password) );
         
+        string randomToken = Utility.GenerateRandom(256);
+        Model_Account account = db.LoginAccount(lr.UsernameOrEmail,lr.Password, cnnId, randomToken);
         Net_OnLoginRequest olr = new Net_OnLoginRequest();
-        olr.Success = 0;
-        olr.Infomation = "Everything is good";
-        olr.Discriminator = "0000";
-        olr.Token = "TOKEN";
+
+        if(account != null) {
+            olr.Success = 1;
+            olr.Infomation = "You've been logged in as " + account.Username;
+            olr.Username = account.Username;
+            olr.Discriminator = account.Discriminator;
+            olr.Token = randomToken;
+            olr.ConnectionId = cnnId;
+        } else {
+            olr.Success = 0;
+        }
+        
+
         
 
         SendClient(recHostId,cnnId, olr);

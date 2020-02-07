@@ -5,6 +5,7 @@ using UnityEngine.UI;
 using UnityEngine.Networking;
 using System.Runtime.Serialization.Formatters.Binary;
 using System.IO;
+using System;
 
 public class Client : MonoBehaviour
 {
@@ -23,6 +24,9 @@ public class Client : MonoBehaviour
     private byte error;
 
     private bool isStarted = false;
+
+    public Account self;
+    private string token;
 
     public Text log;
 
@@ -120,8 +124,32 @@ public class Client : MonoBehaviour
             case NetOP.OnLoginRequest:
                 OnLoginRequest((Net_OnLoginRequest)msg);
                 break;
+            
+            case NetOP.OnAddFollow:
+                OnAddFollow((Net_OnAddFollow)msg);
+                break;
+            
+            case NetOP.OnRequestFollow:
+                OnRequestFollow((Net_OnRequestFollow)msg);
+                break;
+                
+            default:
+                Debug.Log("Recieved a mesage of type unknown " + msg.OP);
+                break;
 
         }
+    }
+
+    private void OnRequestFollow(Net_OnRequestFollow orf)
+    {
+        foreach(var follow in orf.Follows) {
+            HubScene.Instance.AddFollowToUi(follow);
+        }
+    }
+
+    private void OnAddFollow(Net_OnAddFollow oaf)
+    {
+         HubScene.Instance.AddFollowToUi(oaf.Follow);
     }
 
     private void OnCreateAccount(Net_OnCreateAccount oca) {
@@ -134,9 +162,19 @@ public class Client : MonoBehaviour
         LobbyScene.Instance.ChangeAthenticationMessage(olr.Infomation);
 
         if(olr.Success != 1) {
+            Debug.Log("if(olr.Success != 1) {");
             LobbyScene.Instance.EnableInputs();
         } else {
+            Debug.Log("Success login");
+
             // Success login
+            self = new Account();
+            self.ActiveConnection = olr.ConnectionId;
+            self.Username = olr.Username;
+            self.Discriminator = olr.Discriminator;
+            
+            token = olr.Token;
+            UnityEngine.SceneManagement.SceneManager.LoadScene("Hub");
         }
 
     }
@@ -155,19 +193,84 @@ public class Client : MonoBehaviour
     }
 
     public void SendCreateAccount(string username, string password, string email) {
+            
+
+            if(!Utility.IsUsername(username)) {
+                LobbyScene.Instance.ChangeAthenticationMessage("Username is invalid");
+                LobbyScene.Instance.EnableInputs();
+                return;
+            }
+
+            if(!Utility.IsEmail(email)) {
+                LobbyScene.Instance.ChangeAthenticationMessage("Email is invalid");
+                LobbyScene.Instance.EnableInputs();
+                return;
+            }
+
+            if(password == null || password == "") {
+                LobbyScene.Instance.ChangeAthenticationMessage("Password is empty");
+                LobbyScene.Instance.EnableInputs();
+                return;
+            }
+
             Net_CreateAccount ca = new Net_CreateAccount();
+
             ca.Username = username;
-            ca.Password = password;
+            ca.Password = Utility.Sha256FromString(password) ;
             ca.Email = email;
 
+            LobbyScene.Instance.ChangeAthenticationMessage("Sending request...");
             SendServer(ca);
     }
     
     public void SendLoginRequest(string usernameOrEmail, string password) {
+
+            if(!Utility.IsUsernameAndDiscriminator(usernameOrEmail) && !Utility.IsEmail(usernameOrEmail)) {
+                LobbyScene.Instance.ChangeAthenticationMessage("Email or Username#Discriminator is invalid");
+                LobbyScene.Instance.EnableInputs();
+                return;
+            }
+
+            if(password == null || password == "") {
+                LobbyScene.Instance.ChangeAthenticationMessage("Password is empty");
+                LobbyScene.Instance.EnableInputs();
+                return;
+            }
+
+
             Net_LoginRequest lr = new Net_LoginRequest();
             lr.UsernameOrEmail= usernameOrEmail;
-            lr.Password = password;
+            lr.Password = Utility.Sha256FromString(password) ;
             
+            LobbyScene.Instance.ChangeAthenticationMessage("Sending login request...");
             SendServer(lr);
+    }
+
+    public void SendAddFollow(string usernameOrEmail) {
+
+        Net_AddFollow af = new Net_AddFollow();
+
+        af.Token = token;
+        af.UsernameDiscriminatorOrEmail = usernameOrEmail;
+
+        SendServer(af);
+    }
+
+    public void SendRemoveFollow(string username) {
+
+        Net_RemoveFollow rf = new Net_RemoveFollow();
+
+        rf.Token = token;
+        rf.UsernameDiscriminator = username;
+
+        SendServer(rf);
+    }
+
+    public void SendRequestFollow() {
+        Net_RequestFollow rf = new Net_RequestFollow();
+
+        rf.Token = token;
+
+        SendServer(rf);
     }
 }
