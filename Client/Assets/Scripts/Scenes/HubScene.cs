@@ -16,6 +16,8 @@ public class HubScene : MonoBehaviour
     [SerializeField]
     private Transform followContainer;
 
+    private Dictionary<string, GameObject> uiFollows = new Dictionary<string, GameObject>();
+
 
     // Start is called before the first frame update
     void Start()
@@ -33,7 +35,16 @@ public class HubScene : MonoBehaviour
         followItem.transform.GetChild(2).GetComponentInChildren<Button>().onClick.AddListener(delegate {Destroy(followItem);});
         followItem.transform.GetChild(2).GetComponentInChildren<Button>().onClick.AddListener(delegate {OnClickRemoveFollow(follow.Username, follow.Discriminator);});
 
+        uiFollows.Add(follow.Username + "#" + follow.Discriminator, followItem);
+
     }
+
+    public void UpdateFollow(Account follow) {
+        
+         uiFollows[follow.Username + "#" + follow.Discriminator].transform.GetChild(1).GetComponent<Image>().color = (follow.Status != 0) ? Color.green : Color.gray;
+          
+    }
+
     public void OnClickAddFollow() {
         string usernameDiscriminator = addFollowInput.text;
         if(!Utility.IsUsernameAndDiscriminator(usernameDiscriminator) && !Utility.IsEmail(usernameDiscriminator)) {
@@ -48,6 +59,7 @@ public class HubScene : MonoBehaviour
     public void OnClickRemoveFollow(string username, string discriminator) {
         
         Client.Instance.SendRemoveFollow(username + "#" + discriminator);
+        uiFollows.Remove(username + "#" + discriminator);
     }
 
 

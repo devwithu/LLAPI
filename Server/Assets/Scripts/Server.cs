@@ -75,7 +75,7 @@ public class Server : MonoBehaviour
                 Debug.Log(string.Format("User {0} has connected through host {1}", connectionId, recHostId));
                 break;
             case NetworkEventType.DisconnectEvent:
-                Debug.Log(string.Format("User {0} has disConnected!", connectionId));
+                DisconnectEvent(recHostId, connectionId);
                 break;
             case NetworkEventType.BroadcastEvent:
                 Debug.Log("Undexpected network event type");
@@ -125,11 +125,34 @@ public class Server : MonoBehaviour
         }
     }
 
+    private void DisconnectEvent(int recHostId, int cnnId){
+        Debug.Log(string.Format("User {0} has disConnected!", cnnId));
+        
+        Model_Account account =  db.FindAccountByConnectionId(cnnId); 
+        if(account == null) {
+            return ;
+        }
+        db.UpdateAccountAfterDisconnection(account.Email);
+
+        Net_FollowUpdate fu = new Net_FollowUpdate();
+        Model_Account updateAccount = db.FindAccountByEmail(account.Email);
+        fu.Follow = updateAccount.GetAccount();
+        
+        foreach(var f in db.FindAllFollowBy(account.Email)) {
+            if (f.ActiveConnection == 0) {
+                continue;
+            }
+
+            SendClient(recHostId, f.ActiveConnection, fu);
+        }
+
+        
+    }
     private void RequestFollow(int cnnId, int channelId, int recHostId, Net_RequestFollow msg)
     {
          Net_OnRequestFollow orf = new Net_OnRequestFollow();
 
-        orf.Follows = db.FindAllFollowBy(msg.Token);
+        orf.Follows = db.FindAllFollowFrom(msg.Token);
 
          SendClient(recHostId, cnnId, orf);
 
@@ -147,7 +170,7 @@ public class Server : MonoBehaviour
         if(db.InsertFollow(msg.Token, msg.UsernameDiscriminatorOrEmail)){
 
             oaf.Success = 1;
-            
+             
             if(Utility.IsEmail(msg.UsernameDiscriminatorOrEmail)) {
 
                 oaf.Follow = db.FindAccountByEmail(msg.UsernameDiscriminatorOrEmail).GetAccount();
@@ -194,6 +217,18 @@ public class Server : MonoBehaviour
             olr.Discriminator = account.Discriminator;
             olr.Token = randomToken;
             olr.ConnectionId = cnnId;
+
+            Net_FollowUpdate fu = new Net_FollowUpdate();
+            fu.Follow = account.GetAccount();
+            
+            foreach(var f in db.FindAllFollowBy(account.Email)) {
+                if (f.ActiveConnection == 0) {
+                    continue;
+                }
+
+                SendClient(recHostId, f.ActiveConnection, fu);
+            }
+                
         } else {
             olr.Success = 0;
         }

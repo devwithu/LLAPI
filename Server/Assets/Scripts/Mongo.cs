@@ -179,13 +179,24 @@ public class Mongo
         return accounts.FindOne(Query<Model_Account>.EQ(u => u.Token, token));
     }
     
-    public List<Account> FindAllFollowBy(string token) {
+    public List<Account> FindAllFollowFrom(string token) {
         var self = new MongoDBRef("account", FindAccountByToken(token)._id);
         var query = Query<Model_Follow>.EQ(f => f.Sender, self);
 
         List<Account> followsResponse = new List<Account>();
         foreach(var f in follows.Find(query)) {
             followsResponse.Add(FindAccountByObjectId(f.Target.Id.AsObjectId).GetAccount());
+        }
+        return followsResponse;
+    }
+
+    public List<Account> FindAllFollowBy(string email) {
+        var self = new MongoDBRef("account", FindAccountByEmail(email)._id);
+        var query = Query<Model_Follow>.EQ(f => f.Target, self);
+
+        List<Account> followsResponse = new List<Account>();
+        foreach(var f in follows.Find(query)) {
+            followsResponse.Add(FindAccountByObjectId(f.Sender.Id.AsObjectId).GetAccount());
         }
         return followsResponse;
     }
@@ -205,6 +216,11 @@ public class Mongo
         }
         return null;
     }
+
+    public Model_Account FindAccountByConnectionId(int connectionId) {
+         return accounts.FindOne(Query<Model_Account>.EQ(u => u.ActiveConnection, connectionId));
+
+    }
     
     public bool UpdateAccount(string username, string password, string email) {
         return true;
@@ -214,6 +230,18 @@ public class Mongo
         return true;
     }
     
+    public void UpdateAccountAfterDisconnection(string email) {
+        // return accounts.FindOne(Query<Model_Account>.EQ(u => u._id, id));
+        var query = Query<Model_Account>.EQ(a => a.Email, email);
+        var account = accounts.FindOne(query);
+        
+        account.Token = "";
+        account.ActiveConnection = 0;
+        account.Status = 0;
+
+        accounts.Update(query, Update<Model_Account>.Replace(account));
+
+    }
     public void RemoveFollow(string token, string usernameDiscriminator) {
         ObjectId id = FindFollowByUsernameDicriminator(token, usernameDiscriminator)._id;
 

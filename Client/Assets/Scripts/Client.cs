@@ -132,7 +132,11 @@ public class Client : MonoBehaviour
             case NetOP.OnRequestFollow:
                 OnRequestFollow((Net_OnRequestFollow)msg);
                 break;
-                
+
+            case NetOP.FollowUpdate:
+                FollowUpdate((Net_FollowUpdate)msg); 
+                break;
+
             default:
                 Debug.Log("Recieved a mesage of type unknown " + msg.OP);
                 break;
@@ -149,6 +153,7 @@ public class Client : MonoBehaviour
 
     private void OnAddFollow(Net_OnAddFollow oaf)
     {
+        if(oaf.Success == 1)
          HubScene.Instance.AddFollowToUi(oaf.Follow);
     }
 
@@ -177,6 +182,10 @@ public class Client : MonoBehaviour
             UnityEngine.SceneManagement.SceneManager.LoadScene("Hub");
         }
 
+    }
+
+    private void FollowUpdate(Net_FollowUpdate fu) {
+        HubScene.Instance.UpdateFollow(fu.Follow);
     }
     public void SendServer(NetMsg msg) {
         // This is where we hold our data
